@@ -1,0 +1,315 @@
+/*În fișierul json date\candidati.json sunt centralizate opțiunile absolvenților de clasa a VIII-a pentru admiterea la liceu, sub forma (urmariti fisierul):
+        [
+        {
+        "cod_candidat": 1,
+        "nume_candidat": "Pop Marcel",
+        "media": 8.50,
+        "optiuni": [
+        {
+        "cod_liceu": 1,
+        "cod_specializare": 1
+        },
+        ...
+        ]
+        },
+        ...
+        ]
+
+        Liceele sunt memorate în fișierul text date\licee.txt,cate doua linii pentru fiecare liceu, astfel:
+        cod liceu,nume liceu,N
+        cod specializare 1,numar locuri 1,..., cod specializare N, numar locuri N
+
+        Să se scrie o aplicație Java care să îndeplinească următoarele cerințe:
+
+        1. Să afișeze la consolă numărul de candidați cu medii mai mari sau egale cu 9
+        Punctaj: 1 punct
+        Criteriu de acordare: afișare corectă la consolă (100% DONE!)
+
+        2. Să se afișeze lista liceelor sortată descrescător după numărul total de locuri.
+        Pentru fiecare liceu se va afișa codul liceului, numele liceului și numărul total de locuri.
+        Punctaj: 1 punct
+        Criteriu de acordare: afișare corectă la consolă (100% DONE!)
+
+        3. Să se listeze în fișierul jurnal.txt candidații ordonați descrescător după numărul de opțiuni (criteriul 1) iar în caz de egalitate după medie (criteriul 2).
+        Pentru fiecare candidat se va scrie codul, numele, numărul de opțiuni și media de admitere.
+        Punctaj: 1 punct
+        Criteriu de acordare: vizualizare fișier jurnal.txt (100% DONE!)
+
+        4. Să se creeze tabela CANDIDATI în baza de date sqlite examen.db și să se salveze opțiunile candidaților.
+        Tabela va avea câmpurile: cod_candidat - integer, nume_candidat- text, medie - double și numar_optiuni - integer.
+        Comanda creare:
+        "create table IF NOT EXISTS CANDIDATI (cod_candidat integer,nume_candidat text,medie double,numar_optiuni integer)"
+        Punctaj: 2 puncte
+        Criteriu de acordare - Vizualizare tabela*/
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.json.JSONTokener;
+
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.sql.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Scanner;
+
+class Specializare{
+    private int cod;
+    private int locuri;
+
+    public int getCod() {
+        return cod;
+    }
+
+    public int getLocuri() {
+        return locuri;
+    }
+
+    @Override
+    public String toString() {
+        return "specializare{" +
+                "cod=" + cod +
+                ", locuri=" + locuri +
+                '}';
+    }
+
+    public Specializare(int cod, int locuri) {
+        this.cod = cod;
+        this.locuri = locuri;
+    }
+}
+
+class Optiune{
+    private int codLiceu;
+    private int codSpecializare;
+
+    public int getCodLiceu() {
+        return codLiceu;
+    }
+
+    public int getCodSpecializare() {
+        return codSpecializare;
+    }
+
+    @Override
+    public String toString() {
+        return "Optiune{" +
+                "codLiceu=" + codLiceu +
+                ", codSpecializare=" + codSpecializare +
+                '}';
+    }
+
+    public Optiune(int codLiceu, int codSpecializare) {
+        this.codLiceu = codLiceu;
+        this.codSpecializare = codSpecializare;
+    }
+}
+
+class Liceu{
+    private int codliceu;
+    private String denumire;
+    private int nrspecializari;
+    List<Specializare> specializari= new ArrayList<Specializare>();
+
+    public int getCodliceu() {
+        return codliceu;
+    }
+
+    public int getNrLocuri(){
+        int suma=0;
+        for(Specializare s: specializari)
+            suma+=s.getLocuri();
+        return suma;
+    }
+
+    public String getDenumire() {
+        return denumire;
+    }
+
+    public int getNrspecializari() {
+        return nrspecializari;
+    }
+
+    public List<Specializare> getSpecializari() {
+        return specializari;
+    }
+
+    @Override
+    public String toString() {
+        return "Liceu{" +
+                "codliceu=" + codliceu +
+                ", denumire='" + denumire + '\'' +
+                ", nrspecializari=" + nrspecializari +
+                ", specializari=" + specializari +
+                '}';
+    }
+
+    public Liceu(int codliceu, String denumire, int nrspecializari) {
+        this.codliceu = codliceu;
+        this.denumire = denumire;
+        this.nrspecializari = nrspecializari;
+        specializari=new ArrayList<>();
+    }
+}
+
+class Absolvent{
+    private int cod;
+    private String nume;
+    private double media;
+    List<Optiune> optiuni= new ArrayList<Optiune>();
+
+    public Absolvent(int cod, String nume, double media) {
+        this.cod = cod;
+        this.nume = nume;
+        this.media = media;
+        optiuni = new ArrayList<>();
+    }
+
+    public int getCod() {
+        return cod;
+    }
+
+    public String getNume() {
+        return nume;
+    }
+
+    public double getMedia() {
+        return media;
+    }
+
+    public List<Optiune> getOptiuni() {
+        return optiuni;
+    }
+
+    @Override
+    public String toString() {
+        return "Absolvent{" +
+                "cod=" + cod +
+                ", nume='" + nume + '\'' +
+                ", media=" + media +
+                ", optiuni=" + optiuni +
+                '}';
+    }
+}
+
+public class Candidati {
+
+    static final String Cale_candidati = "candidati.json";
+    static final String cale_licee = "licee.txt";
+    static final String cale_bazadedate = "jdbc:sqlite:examen.db";
+
+    static List<Absolvent> candidati = new ArrayList<Absolvent>();
+    static List<Liceu> licee = new ArrayList<Liceu>();
+
+
+    public static void main(String[] args) throws Exception {
+        try (var fisier = new FileReader(Cale_candidati)) {
+            var array = new JSONArray(new JSONTokener(fisier));
+            for (int i = 0; i < array.length(); i++) {
+                var jsonTranzactie = array.getJSONObject(i);
+
+                var cod = jsonTranzactie.getInt("cod_candidat");
+                var nume = jsonTranzactie.getString("nume_candidat");
+                var media = jsonTranzactie.getDouble("media");
+
+                Absolvent c = new Absolvent(cod, nume, media);
+
+                var arrayOptiuni = jsonTranzactie.getJSONArray("optiuni");
+
+                for(int j=0; j<arrayOptiuni.length();j++){
+                    JSONObject optobj = arrayOptiuni.getJSONObject(j);
+                    var codl = optobj.getInt("cod_liceu");
+                    var cods = optobj.getInt("cod_specializare");
+                    Optiune a = new Optiune(codl,cods);
+                    c.optiuni.add(a);
+                }
+                candidati.add(c);
+            }
+        }
+
+        int nr=0;
+        for (Absolvent a : candidati)
+            if(a.getMedia()>=9)
+                nr++;
+
+        System.out.println();
+        System.out.println("Cerinta 1: Elevi cu media peste 9: "+nr);
+
+        try (Scanner scanner = new Scanner(new File(cale_licee))) {
+            String linie1, linie2;
+
+            while (scanner.hasNextLine()) {
+                linie1 = scanner.nextLine();
+                linie2 = scanner.nextLine();
+                Liceu l = new Liceu(Integer.parseInt(linie1.split(",")[0]), linie1.split(",")[1], Integer.parseInt(linie1.split(",")[2]));
+                for(int i=0;i<l.getNrspecializari();i++){
+                    Specializare s = new Specializare(Integer.parseInt(linie2.split(",")[i]), Integer.parseInt(linie2.split(",")[i+1]));
+                    l.specializari.add(s);
+                }
+                licee.add(l);
+            }
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        }
+
+        licee.sort((l1,l2)->l2.getNrLocuri()-l1.getNrLocuri());
+
+        System.out.println();
+        System.out.println("Cerinta 2: Licee+locuri disponibile - descrescator");
+
+        for(Liceu l: licee)
+            System.out.println("Cod liceu: "+l.getCodliceu()+" Denumire liceu: "+l.getDenumire()+" are locuri disponibile: "+l.getNrLocuri());
+
+        System.out.println();
+        System.out.println("Cerinta 3: Candidati sortati");
+
+        Comparator<Absolvent> optiuni = (Absolvent o1, Absolvent o2) -> Integer.compare(o1.optiuni.size(),o2.optiuni.size());
+        Comparator<Absolvent> medie = (Absolvent o1, Absolvent o2) -> Double.compare(o1.getMedia(), o2.getMedia());
+        Comparator<Absolvent> combinat = (Absolvent o1, Absolvent o2) -> optiuni.thenComparing(medie).compare(o1, o2);
+        candidati.stream()
+                .sorted(combinat)
+                .forEach(c-> System.out.println(c.getCod()+" "+c.getNume()+" "+c.optiuni.size()+" "+c.getMedia()));
+
+        try {
+            Connection connection = DriverManager.getConnection(cale_bazadedate);
+            Statement statement = connection.createStatement();
+            statement.executeUpdate("create table IF NOT EXISTS CANDIDATI (cod_candidat integer,nume_candidat text,medie double,numar_optiuni integer)");
+            statement.close();
+
+            for(Absolvent c: candidati) {
+                String sql="insert into CANDIDATI (cod_candidat, nume_candidat, medie, numar_optiuni) values(?,?,?,?)";
+
+                PreparedStatement pstmt = connection.prepareStatement(sql);
+                pstmt.setInt(1,c.getCod());
+                pstmt.setString(2, c.getNume());
+                pstmt.setDouble(3, c.getMedia());
+                pstmt.setInt(4,c.optiuni.size());
+                pstmt.executeUpdate();
+            }
+
+            System.out.println();
+            System.out.println("Cerinta 4: In baza de date: ");
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        try {
+            System.out.println();
+            System.out.println("Afisare Cerinta 4 ");
+            Connection connection = DriverManager.getConnection(cale_bazadedate);
+            Statement statement = connection.createStatement();
+
+            try(ResultSet aplicari  = statement.executeQuery("Select cod_candidat, nume_candidat, medie, numar_optiuni from CANDIDATI")){
+                while(aplicari.next()){
+                    System.out.println(aplicari.getInt(1)+" "+aplicari.getString(2)+" "+aplicari.getDouble(3)+" "+aplicari.getInt(4));
+                }
+            }
+            statement.close();
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+}
